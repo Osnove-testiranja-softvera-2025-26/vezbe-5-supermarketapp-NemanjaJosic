@@ -1,6 +1,6 @@
 ﻿using NUnit.Framework;
 using OTS_Supermarket.Models;
-
+using System;
 
 namespace OTS_Supermarket.Test
 {
@@ -13,18 +13,361 @@ namespace OTS_Supermarket.Test
             // ARRANGE
             Cart cart = new Cart();
             Monitor monitor = new Monitor();
-            
+
             // ACT
             cart.AddOneToCart(monitor);
 
             // ASSERT
-            Assert.That(cart.Size, Is.EqualTo(2));
-            Assert.That(cart.Amount, Is.EqualTo(100));
-
+            Assert.That(cart.Size, Is.EqualTo(1));
+            Assert.That(cart.Amount, Is.EqualTo(monitor.Price));
         }
 
+        [Test]
+        public void AddOneToCart_WhenCartFull_ThrowsException()
+        {
+            // ARRANGE
+            Cart cart = new Cart();
+            cart.AddMultipleToCart(new Monitor(), 10);
 
+            // ACT
+            TestDelegate act = () => cart.AddOneToCart(new Monitor());
 
+            // ASSERT
+            Exception ex = Assert.Throws<Exception>(act);
+            Assert.That(ex.Message, Is.EqualTo("Number of items in cart must be 10 or less!"));
+            Assert.That(cart.Size, Is.EqualTo(10));
+        }
 
+        [Test]
+        public void AddOneToCart_MonitorCounterIncremented_Success()
+        {
+            // ARRANGE
+            Cart cart = new Cart();
+            Monitor monitor = new Monitor();
+
+            // ACT
+            cart.AddOneToCart(monitor);
+
+            // ASSERT
+            Assert.That(cart.Monitor_counter, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void AddMultipleToCart_ValidQuantity_AddsAllAndUpdatesAmount()
+        {
+            // ARRANGE
+            Cart cart = new Cart();
+            Keyboard keyboard = new Keyboard();
+
+            // ACT
+            cart.AddMultipleToCart(keyboard, 3);
+
+            // ASSERT
+            Assert.That(cart.Size, Is.EqualTo(3));
+            Assert.That(cart.Amount, Is.EqualTo(150));
+            Assert.That(cart.Keyboard_counter, Is.EqualTo(3));
+            Assert.That(cart.Items.Count, Is.EqualTo(3));
+        }
+
+        [Test]
+        public void AddMultipleToCart_WhenExceedsLimit_ThrowsException()
+        {
+            // ARRANGE
+            Cart cart = new Cart();
+            cart.AddMultipleToCart(new Chair(), 9);
+
+            // ACT
+            TestDelegate act = () => cart.AddMultipleToCart(new Chair(), 2);
+
+            // ASSERT
+            Exception ex = Assert.Throws<Exception>(act);
+            Assert.That(ex.Message, Is.EqualTo("Number of items in cart must be 10 or less!"));
+            Assert.That(cart.Size, Is.EqualTo(9));
+        }
+
+        [Test]
+        public void DeleteAll_WithItems_ClearsCart()
+        {
+            // ARRANGE
+            Cart cart = new Cart();
+            cart.AddOneToCart(new Monitor());
+            cart.AddOneToCart(new Keyboard());
+            double amountBefore = cart.Amount;
+
+            // ACT
+            cart.DeleteAll();
+
+            // ASSERT
+            Assert.That(cart.Size, Is.EqualTo(0));
+            Assert.That(cart.Items.Count, Is.EqualTo(0));
+            Assert.That(cart.Monitor_counter, Is.EqualTo(0));
+            Assert.That(cart.Keyboard_counter, Is.EqualTo(0));
+            Assert.That(cart.Amount, Is.EqualTo(amountBefore));
+        }
+
+        [Test]
+        public void DeleteAll_EmptyCart_ThrowsException()
+        {
+            // ARRANGE
+            Cart cart = new Cart();
+
+            // ACT
+            TestDelegate act = () => cart.DeleteAll();
+
+            // ASSERT
+            Exception ex = Assert.Throws<Exception>(act);
+            Assert.That(ex.Message, Is.EqualTo("Cannot restore empty cart!"));
+        }
+
+        [Test]
+        public void Print_EmptyCart_ThrowsException()
+        {
+            // ARRANGE
+            Cart cart = new Cart();
+
+            // ACT
+            TestDelegate act = () => cart.Print();
+
+            // ASSERT
+            Exception ex = Assert.Throws<Exception>(act);
+            Assert.That(ex.Message, Is.EqualTo("Cannot print empty cart!"));
+        }
+
+        [Test]
+        public void Print_WithItems_ReturnsConcatenatedString()
+        {
+            // ARRANGE
+            Cart cart = new Cart();
+            Monitor monitor = new Monitor();
+            Keyboard keyboard = new Keyboard();
+            cart.AddOneToCart(monitor);
+            cart.AddOneToCart(keyboard);
+
+            // ACT
+            string result = cart.Print();
+
+            // ASSERT
+            Assert.That(result, Is.EqualTo(monitor.ToString() + keyboard.ToString()));
+        }
+
+        [TestCase("2024/01/01")]
+        [TestCase("01-01-2024")]
+        public void Calculate_InvalidDateFormat_ThrowsException(string date)
+        {
+            // ARRANGE
+            Cart cart = new Cart();
+
+            // ACT
+            TestDelegate act = () => cart.Calculate(date);
+
+            // ASSERT
+            Exception ex = Assert.Throws<Exception>(act);
+            Assert.That(ex.Message, Is.EqualTo("Wrong date format! Date must be in format yyyy-MM-dd"));
+        }
+
+        [Test]
+        public void Calculate_TodayDate_ThrowsException()
+        {
+            // ARRANGE
+            Cart cart = new Cart();
+            string date = DateTime.Today.ToString("yyyy-MM-dd");
+
+            // ACT
+            TestDelegate act = () => cart.Calculate(date);
+
+            // ASSERT
+            Exception ex = Assert.Throws<Exception>(act);
+            Assert.That(ex.Message, Is.EqualTo("Date of delivery can't be today's date!"));
+        }
+
+        [Test]
+        public void Calculate_DaysGreaterThan7_ThrowsException()
+        {
+            // ARRANGE
+            Cart cart = new Cart();
+            string date = DateTime.Today.AddDays(8).ToString("yyyy-MM-dd");
+
+            // ACT
+            TestDelegate act = () => cart.Calculate(date);
+
+            // ASSERT
+            Exception ex = Assert.Throws<Exception>(act);
+            Assert.That(ex.Message, Is.EqualTo("Days for delivery must be less than 7!"));
+        }
+
+        [Test]
+        public void Calculate_DaysLessOrEqual3_Discount10PercentApplied()
+        {
+            // ARRANGE
+            Cart cart = new Cart();
+            string date = GetDateStringInRange(1, 3, IsWeekday);
+            cart.AddMultipleToCart(new Monitor(), 3);
+            cart.AddMultipleToCart(new Computer(), 3);
+            cart.AddMultipleToCart(new Laptop(), 3);
+            cart.Budget = 7000;
+
+            // ACT
+            cart.Calculate(date);
+
+            // ASSERT
+            Assert.That(cart.Budget, Is.EqualTo(1330).Within(0.001));
+        }
+
+        [Test]
+        public void Calculate_DaysLessOrEqual3_Discount8PercentApplied()
+        {
+            // ARRANGE
+            Cart cart = new Cart();
+            string date = GetNextWeekdayWithinThreeDays();
+            cart.AddMultipleToCart(new Laptop(), 1);
+            cart.AddMultipleToCart(new Chair(), 8);
+            cart.Budget = 2000;
+
+            // ACT
+            cart.Calculate(date);
+
+            // ASSERT
+            Assert.That(cart.Budget, Is.EqualTo(380.8).Within(0.001));
+        }
+
+        [Test]
+        public void Calculate_DaysLessOrEqual3_Discount5PercentLaptopComputerChairApplied()
+        {
+            // ARRANGE
+            Cart cart = new Cart();
+            string date = GetDateStringInRange(1, 3, dateTime => true);
+            cart.AddOneToCart(new Laptop());
+            cart.AddOneToCart(new Computer());
+            cart.AddOneToCart(new Chair());
+            cart.AddMultipleToCart(new Keyboard(), 3);
+            cart.Budget = 3000;
+
+            // ACT
+            cart.Calculate(date);
+
+            // ASSERT
+            Assert.That(cart.Budget, Is.EqualTo(843.5).Within(0.001));
+        }
+
+        [Test]
+        public void Calculate_DaysLessOrEqual3_Discount5PercentAmountApplied()
+        {
+            // ARRANGE
+            Cart cart = new Cart();
+            string date = GetDateStringInRange(1, 3, dateTime => true);
+            cart.AddMultipleToCart(new Computer(), 6);
+            cart.Budget = 8000;
+
+            // ACT
+            cart.Calculate(date);
+
+            // ASSERT
+            Assert.That(cart.Budget, Is.EqualTo(1160).Within(0.001));
+        }
+
+        [Test]
+        public void Calculate_DaysGreaterThan3_Discount20PercentApplied()
+        {
+            // ARRANGE
+            Cart cart = new Cart();
+            string date = GetDateStringInRange(4, 7, IsWeekday);
+            cart.AddMultipleToCart(new Monitor(), 3);
+            cart.AddMultipleToCart(new Computer(), 3);
+            cart.AddMultipleToCart(new Laptop(), 3);
+            cart.Budget = 7000;
+
+            // ACT
+            cart.Calculate(date);
+
+            // ASSERT
+            Assert.That(cart.Budget, Is.EqualTo(1960).Within(0.001));
+        }
+
+        [Test]
+        public void Calculate_DaysGreaterThan3_Discount18PercentApplied_WithKeyboardAndMonitorIgnoresSize()
+        {
+            // ARRANGE
+            Cart cart = new Cart();
+            string date = GetDateStringInRange(4, 7, IsWeekday);
+            cart.AddOneToCart(new Keyboard());
+            cart.AddOneToCart(new Monitor());
+            cart.Budget = 200;
+
+            // ACT
+            cart.Calculate(date);
+
+            // ASSERT
+            Assert.That(cart.Budget, Is.EqualTo(77).Within(0.001));
+        }
+
+        [Test]
+        public void Calculate_DaysGreaterThan3_Discount15PercentApplied()
+        {
+            // ARRANGE
+            Cart cart = new Cart();
+            string date = GetDateStringInRange(4, 7, IsWeekday);
+            cart.AddMultipleToCart(new Computer(), 4);
+            cart.AddMultipleToCart(new Keyboard(), 2);
+            cart.Budget = 6000;
+
+            // ACT
+            cart.Calculate(date);
+
+            // ASSERT
+            Assert.That(cart.Budget, Is.EqualTo(1835).Within(0.001));
+        }
+
+        [Test]
+        public void Calculate_InsufficientBudget_ThrowsException()
+        {
+            // ARRANGE
+            Cart cart = new Cart();
+            string date = GetDateStringInRange(1, 3, dateTime => true);
+            cart.AddOneToCart(new Computer());
+            cart.Budget = 1000;
+
+            // ACT
+            TestDelegate act = () => cart.Calculate(date);
+
+            // ASSERT
+            Exception ex = Assert.Throws<Exception>(act);
+            Assert.That(ex.Message, Is.EqualTo("Not enough budget!"));
+        }
+
+        private static string GetNextWeekdayWithinThreeDays()
+        {
+            DateTime date = DateTime.Today.AddDays(1);
+
+            for (int i = 0; i < 3; i++)
+            {
+                if (IsWeekday(date))
+                {
+                    return date.ToString("yyyy-MM-dd");
+                }
+
+                date = date.AddDays(1);
+            }
+
+            throw new Exception("No suitable weekday found within three days.");
+        }
+
+        private static string GetDateStringInRange(int minDays, int maxDays, Func<DateTime, bool> predicate)
+        {
+            for (int i = minDays; i <= maxDays; i++)
+            {
+                DateTime date = DateTime.Today.AddDays(i);
+                if (predicate == null || predicate(date))
+                {
+                    return date.ToString("yyyy-MM-dd");
+                }
+            }
+
+            throw new Exception("No suitable date found in range.");
+        }
+
+        private static bool IsWeekday(DateTime date)
+        {
+            return date.DayOfWeek != DayOfWeek.Saturday && date.DayOfWeek != DayOfWeek.Sunday;
+        }
     }
 }
